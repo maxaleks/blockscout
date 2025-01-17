@@ -2,18 +2,17 @@ defmodule BlockScoutWeb.AddressContractVerificationViaStandardJsonInputControlle
   use BlockScoutWeb, :controller
 
   alias BlockScoutWeb.Controller
-  alias Explorer.Chain
   alias Explorer.Chain.SmartContract
   alias Explorer.SmartContract.CompilerVersion
 
   def new(conn, %{"address_id" => address_hash_string}) do
-    if Chain.smart_contract_fully_verified?(address_hash_string) do
-      address_path =
+    if SmartContract.verified_with_full_match?(address_hash_string) do
+      address_contract_path =
         conn
-        |> address_path(:show, address_hash_string)
+        |> address_contract_path(:index, address_hash_string)
         |> Controller.full_path()
 
-      redirect(conn, to: address_path)
+      redirect(conn, to: address_contract_path)
     else
       changeset =
         SmartContract.changeset(

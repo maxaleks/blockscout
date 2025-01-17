@@ -3,7 +3,8 @@ defmodule BlockScoutWeb.ChainControllerTest do
     # ETS table is shared in `Explorer.Counters.AddressesCounter`
     async: false
 
-  import BlockScoutWeb.WebRouter.Helpers, only: [chain_path: 2, block_path: 3, transaction_path: 3, address_path: 3]
+  import BlockScoutWeb.Routers.WebRouter.Helpers,
+    only: [chain_path: 2, block_path: 3, transaction_path: 3, address_path: 3]
 
   alias Explorer.Chain.Block
   alias Explorer.Counters.AddressesCounter
@@ -205,21 +206,21 @@ defmodule BlockScoutWeb.ChainControllerTest do
 
       "0x" <> non_prefix_hash = to_string(transaction.hash)
 
-      conn = get(conn, "search?q=#{to_string(non_prefix_hash)}")
+      conn = get(conn, "/search?q=#{to_string(non_prefix_hash)}")
 
       assert redirected_to(conn) == transaction_path(conn, :show, transaction)
     end
 
     test "finds an address by hash", %{conn: conn} do
       address = insert(:address)
-      conn = get(conn, "search?q=#{to_string(address.hash)}")
+      conn = get(conn, "/search?q=#{to_string(address.hash)}")
 
       assert redirected_to(conn) == address_path(conn, :show, address)
     end
 
     test "finds an address by hash when there are extra spaces", %{conn: conn} do
       address = insert(:address)
-      conn = get(conn, "search?q=#{to_string(address.hash)}")
+      conn = get(conn, "/search?q=#{to_string(address.hash)}")
 
       assert redirected_to(conn) == address_path(conn, :show, address)
     end
@@ -228,13 +229,13 @@ defmodule BlockScoutWeb.ChainControllerTest do
       address = insert(:address)
       "0x" <> non_prefix_hash = to_string(address.hash)
 
-      conn = get(conn, "search?q=#{to_string(non_prefix_hash)}")
+      conn = get(conn, "/search?q=#{to_string(non_prefix_hash)}")
 
       assert redirected_to(conn) == address_path(conn, :show, address)
     end
 
     test "redirects to result page when it finds nothing", %{conn: conn} do
-      conn = get(conn, "search?q=zaphod")
+      conn = get(conn, "/search?q=zaphod")
       assert conn.status == 302
     end
   end

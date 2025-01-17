@@ -1,61 +1,104 @@
-FROM bitwalker/alpine-elixir-phoenix:1.13
+FROM hexpm/elixir:1.17.3-erlang-27.1-alpine-3.20.3 AS builder-deps
 
-RUN apk --no-cache --update add alpine-sdk gmp-dev automake libtool inotify-tools autoconf python3 file
+WORKDIR /app
 
-ENV GLIBC_REPO=https://github.com/sgerrand/alpine-pkg-glibc
-ENV GLIBC_VERSION=2.30-r0
-
-RUN set -ex && \
-    apk --update add libstdc++ curl ca-certificates && \
-    for pkg in glibc-${GLIBC_VERSION} glibc-bin-${GLIBC_VERSION}; \
-        do curl -sSL ${GLIBC_REPO}/releases/download/${GLIBC_VERSION}/${pkg}.apk -o /tmp/${pkg}.apk; done && \
-    apk add --allow-untrusted /tmp/*.apk && \
-    rm -v /tmp/*.apk && \
-    /usr/glibc-compat/sbin/ldconfig /lib /usr/glibc-compat/lib
-
-# Get Rust
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-
-ENV PATH="$HOME/.cargo/bin:${PATH}"
-ENV RUSTFLAGS="-C target-feature=-crt-static"
-
-EXPOSE 4000
-
-ENV PORT=4000 \
-    MIX_ENV="prod" \
-    SECRET_KEY_BASE="RMgI4C1HSkxsEjdhtGMfwAHfyT6CKWXOgzCboJflfSm4jeAlic52io05KB6mqzc5"
+RUN apk --no-cache --update add \
+    alpine-sdk gmp-dev automake libtool inotify-tools autoconf python3 file gcompat libstdc++ curl ca-certificates git make
 
 # Cache elixir deps
-ADD mix.exs mix.lock ./
-ADD apps/block_scout_web/mix.exs ./apps/block_scout_web/
-ADD apps/explorer/mix.exs ./apps/explorer/
-ADD apps/ethereum_jsonrpc/mix.exs ./apps/ethereum_jsonrpc/
-ADD apps/indexer/mix.exs ./apps/indexer/
+COPY mix.exs mix.lock ./
+COPY apps/block_scout_web/mix.exs ./apps/block_scout_web/
+COPY apps/explorer/mix.exs ./apps/explorer/
+COPY apps/ethereum_jsonrpc/mix.exs ./apps/ethereum_jsonrpc/
+COPY apps/indexer/mix.exs ./apps/indexer/
+COPY apps/utils/mix.exs ./apps/utils/
+COPY apps/nft_media_handler/mix.exs ./apps/nft_media_handler/
 
-RUN mix do deps.get, local.rebar --force, deps.compile
+ENV MIX_ENV="prod"
+ENV MIX_HOME=/opt/mix
+RUN mix local.hex --force
+RUN mix do deps.get, local.rebar --force, deps.compile --skip-umbrella-children
 
-ADD . .
+COPY config ./config
+COPY rel ./rel
+COPY apps ./apps
 
-ARG COIN
-RUN if [ "$COIN" != "" ]; then \
-        sed -i s/"POA"/"${COIN}"/g apps/block_scout_web/priv/gettext/en/LC_MESSAGES/default.po; \
-        sed -i "/msgid \"Ether\"/{n;s/msgstr \"\"/msgstr \"${COIN}\"/g}" apps/block_scout_web/priv/gettext/default.pot; \
-        sed -i "/msgid \"Ether\"/{n;s/msgstr \"\"/msgstr \"${COIN}\"/g}" apps/block_scout_web/priv/gettext/en/LC_MESSAGES/default.po; \
-    fi
+##############################################################
+FROM builder-deps AS builder
 
-# Run forderground build and phoenix digest
+ENV DISABLE_WEBAPP=true
+ENV ADMIN_PANEL_ENABLED=false
+ARG DISABLE_INDEXER
+ENV DISABLE_INDEXER=${DISABLE_INDEXER}
+ARG DISABLE_API
+ENV DISABLE_API=${DISABLE_API}
+ARG API_V1_READ_METHODS_DISABLED
+ENV API_V1_READ_METHODS_DISABLED=${API_V1_READ_METHODS_DISABLED}
+ARG API_V1_WRITE_METHODS_DISABLED
+ENV API_V1_WRITE_METHODS_DISABLED=${API_V1_WRITE_METHODS_DISABLED}
+ARG CHAIN_TYPE
+ENV CHAIN_TYPE=${CHAIN_TYPE}
+ARG BRIDGED_TOKENS_ENABLED
+ENV BRIDGED_TOKENS_ENABLED=${BRIDGED_TOKENS_ENABLED}
+ARG MUD_INDEXER_ENABLED
+ENV MUD_INDEXER_ENABLED=${MUD_INDEXER_ENABLED}
+ARG SHRINK_INTERNAL_TRANSACTIONS_ENABLED
+ENV SHRINK_INTERNAL_TRANSACTIONS_ENABLED=${SHRINK_INTERNAL_TRANSACTIONS_ENABLED}
+ARG API_GRAPHQL_MAX_COMPLEXITY
+ENV API_GRAPHQL_MAX_COMPLEXITY=${API_GRAPHQL_MAX_COMPLEXITY}
+
+# Run backend compilation
 RUN mix compile
 
-RUN npm install npm@latest
+RUN mkdir -p /opt/release && \
+    mix release blockscout && \
+    mv _build/${MIX_ENV}/rel/blockscout /opt/release
 
-# Add blockscout npm deps
-RUN cd apps/block_scout_web/assets/ && \
-    npm install && \
-    npm run deploy && \
-    cd -
+##############################################################
+FROM hexpm/elixir:1.17.3-erlang-27.1-alpine-3.20.3
 
-RUN cd apps/explorer/ && \
-    npm install && \
-    apk update && apk del --force-broken-world alpine-sdk gmp-dev automake libtool inotify-tools autoconf python3
+WORKDIR /app
 
-RUN mix phx.digest
+ARG BLOCKSCOUT_USER=blockscout
+ARG BLOCKSCOUT_GROUP=blockscout
+ARG BLOCKSCOUT_UID=10001
+ARG BLOCKSCOUT_GID=10001
+
+RUN apk --no-cache --update add jq curl && \
+    addgroup --system --gid ${BLOCKSCOUT_GID} ${BLOCKSCOUT_GROUP} && \
+    adduser --system --uid ${BLOCKSCOUT_UID} --ingroup ${BLOCKSCOUT_GROUP} --disabled-password ${BLOCKSCOUT_USER}
+
+ENV DISABLE_WEBAPP=true
+ENV ADMIN_PANEL_ENABLED=false
+ARG DISABLE_INDEXER
+ENV DISABLE_INDEXER=${DISABLE_INDEXER}
+ARG DISABLE_API
+ENV DISABLE_API=${DISABLE_API}
+ARG API_V1_READ_METHODS_DISABLED
+ENV API_V1_READ_METHODS_DISABLED=${API_V1_READ_METHODS_DISABLED}
+ARG API_V1_WRITE_METHODS_DISABLED
+ENV API_V1_WRITE_METHODS_DISABLED=${API_V1_WRITE_METHODS_DISABLED}
+ARG CHAIN_TYPE
+ENV CHAIN_TYPE=${CHAIN_TYPE}
+ARG BRIDGED_TOKENS_ENABLED
+ENV BRIDGED_TOKENS_ENABLED=${BRIDGED_TOKENS_ENABLED}
+ARG MUD_INDEXER_ENABLED
+ENV MUD_INDEXER_ENABLED=${MUD_INDEXER_ENABLED}
+ARG SHRINK_INTERNAL_TRANSACTIONS_ENABLED
+ENV SHRINK_INTERNAL_TRANSACTIONS_ENABLED=${SHRINK_INTERNAL_TRANSACTIONS_ENABLED}
+ARG API_GRAPHQL_MAX_COMPLEXITY
+ENV API_GRAPHQL_MAX_COMPLEXITY=${API_GRAPHQL_MAX_COMPLEXITY}
+
+ARG RELEASE_VERSION
+ENV RELEASE_VERSION=${RELEASE_VERSION}
+ARG BLOCKSCOUT_VERSION
+ENV BLOCKSCOUT_VERSION=${BLOCKSCOUT_VERSION}
+
+COPY --from=builder --chown=${BLOCKSCOUT_USER}:${BLOCKSCOUT_GROUP} /opt/release/blockscout .
+COPY --from=builder --chown=${BLOCKSCOUT_USER}:${BLOCKSCOUT_GROUP} /app/config/config_helper.exs ./config/config_helper.exs
+COPY --from=builder --chown=${BLOCKSCOUT_USER}:${BLOCKSCOUT_GROUP} /app/config/config_helper.exs /app/releases/${RELEASE_VERSION}/config_helper.exs
+COPY --from=builder --chown=${BLOCKSCOUT_USER}:${BLOCKSCOUT_GROUP} /app/config/assets/precompiles-arbitrum.json ./config/assets/precompiles-arbitrum.json
+
+RUN mkdir dets && mkdir temp && chown -R ${BLOCKSCOUT_USER}:${BLOCKSCOUT_GROUP} /app
+
+USER ${BLOCKSCOUT_USER}:${BLOCKSCOUT_GROUP}

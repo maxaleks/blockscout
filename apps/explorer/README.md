@@ -1,7 +1,6 @@
 # BlockScout
 
-This is a tool for inspecting and analyzing the POA Network blockchain.
-
+Blockscout is a robust open-source tool for exploring, confirming, and inspecting transactions on any EVM blockchain.
 
 ## Machine Requirements
 
@@ -9,11 +8,9 @@ This is a tool for inspecting and analyzing the POA Network blockchain.
 * Elixir 1.9+
 * Postgres 10.3
 
-
 ## Required Accounts
 
 * Github for code storage
-
 
 ## Setup Instructions
 
@@ -21,16 +18,16 @@ This is a tool for inspecting and analyzing the POA Network blockchain.
 
 To get BlockScout up and running locally:
 
-  * Install dependencies with `$ mix do deps.get, local.rebar, deps.compile, compile`
-  * Create and migrate your database with `$ mix ecto.create && mix ecto.migrate`
-  * Run IEx (Interactive Elixir) to access the index and explore: `$ iex -S mix`
+* Install dependencies with `$ mix do deps.get, local.rebar, deps.compile, compile`
+* Create and migrate your database with `$ mix ecto.create && mix ecto.migrate`
+* Run IEx (Interactive Elixir) to access the index and explore: `$ iex -S mix`
 
 ### Testing
 
-  * Format the Elixir code: `$ mix format`
-  * Lint the Elixir code: `$ mix credo --strict`
-  * Run the dialyzer: `mix dialyzer --halt-exit-status`
-  * Check the Elixir code for vulnerabilities: `$ mix sobelow --config`
+* Format the Elixir code: `$ mix format`
+* Lint the Elixir code: `$ mix credo --strict`
+* Run the dialyzer: `mix dialyzer --halt-exit-status`
+* Check the Elixir code for vulnerabilities: `$ mix sobelow --config`
 
 ### Benchmarking
 

@@ -13,4 +13,10 @@ defmodule Explorer.ExchangeRates.Source.NoOpSource do
 
   @impl Source
   def source_url(_), do: :ignore
+
+  @impl Source
+  def secondary_source_url, do: :ignore
+
+  @impl Source
+  def headers, do: []
 end

@@ -3,6 +3,8 @@ defmodule Indexer.Transform.Blocks do
   Protocol for transforming blocks.
   """
 
+  alias ExSecp256k1
+
   @type block :: map()
 
   @doc """
@@ -35,9 +37,8 @@ defmodule Indexer.Transform.Blocks do
     recover_pub_key(signature_hash, decode(signature))
   end
 
-  # Signature hash calculated from the block header.
-  # Needed for PoA-based chains
-  defp signature_hash(block) do
+  # Get EIP-1559 compatible block header
+  defp get_header_data(block) do
     header_data = [
       decode(block.parent_hash),
       decode(block.sha3_uncles),
@@ -55,6 +56,19 @@ defmodule Indexer.Transform.Blocks do
       decode(block.mix_hash),
       decode(block.nonce)
     ]
+
+    if Map.has_key?(block, :base_fee_per_gas) do
+      # credo:disable-for-next-line
+      header_data ++ [block.base_fee_per_gas]
+    else
+      header_data
+    end
+  end
+
+  # Signature hash calculated from the block header.
+  # Needed for PoA-based chains
+  defp signature_hash(block) do
+    header_data = get_header_data(block)
 
     ExKeccak.hash_256(ExRLP.encode(header_data))
   end
@@ -79,8 +93,7 @@ defmodule Indexer.Transform.Blocks do
 
     # First byte represents compression which can be ignored
     # Private key is the last 64 bytes
-    {:ok, <<_compression::bytes-size(1), private_key::binary>>} =
-      :libsecp256k1.ecdsa_recover_compact(signature_hash, r <> s, :uncompressed, v)
+    {:ok, <<_compression::bytes-size(1), private_key::binary>>} = ExSecp256k1.recover(signature_hash, r, s, v)
 
     # Public key comes from the last 20 bytes
     <<_::bytes-size(12), public_key::binary>> = ExKeccak.hash_256(private_key)
